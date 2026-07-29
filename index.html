@@ -1,0 +1,1487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Request Early Access</title>
+<style>
+  :root{
+    --cream:#121214;
+    --red:#9e2027;
+    --ink:#141414;
+    --ring:rgba(255,255,255,.5);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    background:var(--cream);
+    overflow:hidden;
+    font-family:-apple-system,'Helvetica Neue',Arial,sans-serif;
+    position:relative;
+  }
+
+  /* futuristic dot-grid backdrop */
+  canvas#dots{
+    position:fixed;inset:0;width:100%;height:100%;display:block;
+  }
+
+  .scene{
+    position:fixed;inset:0;
+    display:flex;align-items:center;justify-content:center;
+    perspective:1800px;
+  }
+
+  .rings{
+    position:absolute;inset:0;
+    animation: sceneIn 1.5s cubic-bezier(.16,1,.3,1) both;
+    transform-style:preserve-3d;
+  }
+  .ring{
+    position:absolute;
+    top:50%;left:50%;
+    border:1px solid var(--ring);
+    border-radius:50%;
+    transform:translate(-50%,-50%);
+    will-change:transform;
+    transition:border-color .9s ease;
+  }
+  .ring-a{ width:118vmax;height:118vmax; top:18%; left:68%; animation:spin 100s linear infinite; }
+  .ring-b{ width:76vmax; height:76vmax; top:54%; left:47%; animation:spin 65s linear infinite reverse; }
+  .ring-c{ width:42vmax; height:42vmax; top:50%; left:50%; animation:spin 40s linear infinite; opacity:.7; }
+
+  /* rings glow red once "Start with you" is clicked */
+  .rings.glow .ring{
+    border-color:#c62831;
+    box-shadow:0 0 16px 1px rgba(198,40,49,.55), 0 0 34px 3px rgba(198,40,49,.3);
+  }
+
+  /* on click, the outlines tilt into 3D and tumble around their own vertical
+     axis (instead of the flat, in-plane spin) — same crossing-arc look, but
+     with real depth as they turn */
+  @keyframes spin3d{
+    from{ transform:translate(-50%,-50%) rotateX(58deg) rotateY(0deg); }
+    to{   transform:translate(-50%,-50%) rotateX(58deg) rotateY(360deg); }
+  }
+  @keyframes spin3dRev{
+    from{ transform:translate(-50%,-50%) rotateX(58deg) rotateY(360deg); }
+    to{   transform:translate(-50%,-50%) rotateX(58deg) rotateY(0deg); }
+  }
+  .rings.fast .ring-a{ animation:spin3d 22s linear infinite; }
+  .rings.fast .ring-b{ animation:spin3dRev 15s linear infinite; }
+  .rings.fast .ring-c{ animation:spin3d 9s linear infinite; }
+
+  .orbit-dot{
+    position:absolute;
+    width:13px;height:13px;margin:-6.5px;
+    border-radius:50%;
+    background:var(--red);
+    box-shadow:0 0 14px rgba(158,32,39,.55);
+  }
+  .orbit-dot.sm{ width:9px;height:9px;margin:-4.5px; box-shadow:0 0 9px rgba(158,32,39,.5);}
+
+  @keyframes spin{ to{ transform:translate(-50%,-50%) rotate(360deg);} }
+  @keyframes sceneIn{
+    from{ opacity:0; transform:scale(.78);}
+    to{ opacity:1; transform:scale(1);}
+  }
+
+  .hero{
+    position:relative; z-index:5;
+    display:flex;flex-direction:column;align-items:center;gap:38px;
+    animation: heroIn 1.2s cubic-bezier(.16,1,.3,1) both;
+    animation-delay:.2s;
+    padding:0 20px;
+  }
+  @keyframes heroIn{
+    from{opacity:0; transform:translateY(22px) scale(.9);}
+    to{opacity:1; transform:translateY(0) scale(1);}
+  }
+
+  .logo{
+    width:104px;height:104px;
+    filter:drop-shadow(0 14px 26px rgba(158,32,39,.35));
+    animation: breathe 4.6s ease-in-out infinite;
+  }
+  @keyframes breathe{
+    0%,100%{transform:scale(.98);}
+    50%{transform:scale(1.1);}
+  }
+
+  .brand-stack{
+    display:flex;flex-direction:column;align-items:center;gap:22px;
+  }
+
+  @keyframes lineIn{
+    from{ opacity:0; transform:translateY(10px); }
+    to{ opacity:1; transform:translateY(0); }
+  }
+
+  /* tagline sits above the box, in normal document flow */
+  .tagline{
+    font-size:17px;font-weight:600;line-height:1.4;
+    color:rgba(255,255,255,.82);
+    text-align:center;
+    max-width:380px;
+    opacity:0;
+    animation: lineIn .9s cubic-bezier(.16,1,.3,1) both;
+    animation-delay:.4s;
+  }
+
+  /* the CTA box sits still — it never moves. Only the little arrow handle
+     inside it drags, left to right. */
+  .cta-row{
+    display:flex;align-items:center;justify-content:center;
+    opacity:0;
+    width:100%;
+    animation: lineIn .9s cubic-bezier(.16,1,.3,1) both;
+    animation-delay:.6s;
+  }
+
+  /* one single pill — the box itself IS the track. It never moves; only
+     the light circular handle drags across it, left to right. */
+  .cta-box{
+    position:relative;
+    display:flex;align-items:center;justify-content:center;
+    background:var(--ink);color:#fff;
+    width:min(360px,92vw);
+    height:64px;
+    border-radius:999px;
+    border:1.5px solid rgba(255,255,255,.35);
+    box-shadow:0 14px 30px rgba(20,20,20,.25);
+    transition:box-shadow .25s ease, background .25s ease, opacity .6s ease;
+    touch-action:manipulation;
+  }
+  .cta-box.dragging{
+    background:var(--red);
+    box-shadow:0 16px 34px rgba(158,32,39,.35);
+  }
+  /* once triggered, the whole CTA fades away — reappears when the panel is dismissed */
+  .cta-box.sent{
+    opacity:0;
+    pointer-events:none;
+  }
+
+  .cta-label{
+    font-size:17px;font-weight:600;font-family:inherit;
+    white-space:nowrap;
+    transition:opacity .25s ease;
+  }
+
+  .cta-handle{
+    position:absolute;top:50%;left:4px;margin-top:-28px;
+    width:56px;height:56px;border-radius:50%;
+    background:linear-gradient(160deg,#ffffff,#d9d9d9);
+    display:flex;align-items:center;justify-content:center;
+    cursor:grab;
+    touch-action:none;
+    box-shadow:0 4px 10px rgba(0,0,0,.3);
+  }
+  .cta-handle.grabbing{ cursor:grabbing; }
+  .cta-handle .arrow{
+    width:20px;height:20px;color:var(--ink);flex-shrink:0;
+  }
+  .cta-box::after{
+    content:"";position:absolute;inset:-6px;border-radius:999px;
+    border:2px solid var(--red);opacity:0;pointer-events:none;
+  }
+  .cta-box.ripple::after{ animation: ctaRipple .7s ease-out; }
+  @keyframes ctaRipple{
+    from{ opacity:.9; transform:scale(1); }
+    to{ opacity:0; transform:scale(1.55); }
+  }
+
+  /* pinch-and-slide hand gesture — a quiet text caption under the CTA.
+     Hidden on mobile widths below (a phone can't be held steady enough to
+     also pinch-gesture at its own front camera one-handed) — see the
+     mobile media query near the bottom of this stylesheet. */
+  @keyframes gestureLineIn{
+    from{ opacity:0; transform:translateX(-50%) translateY(10px); }
+    to{ opacity:1; transform:translateX(-50%) translateY(0); }
+  }
+  .gesture-row{
+    position:absolute;
+    left:50%;top:100%;
+    transform:translateX(-50%);
+    margin-top:18px;
+    white-space:nowrap;
+    opacity:0;
+    animation: gestureLineIn .9s cubic-bezier(.16,1,.3,1) both;
+    animation-delay:.8s;
+    transition:opacity .6s ease;
+  }
+  .gesture-row.sent{
+    animation:none;
+    opacity:0;
+    pointer-events:none;
+  }
+  .gesture-link{
+    font-family:inherit;font-size:12.5px;font-weight:600;
+    color:rgba(255,255,255,.45);
+    background:none;border:none;padding:4px;cursor:pointer;
+    transition:color .2s ease;
+  }
+  .gesture-link:hover{ color:rgba(255,255,255,.8); }
+  .gesture-link:disabled{ cursor:default; }
+  .gesture-link.active{ color:var(--red); }
+  .gesture-link.loading{ animation:gesturePulse 1s ease-in-out infinite; }
+  @keyframes gesturePulse{ 0%,100%{ opacity:.4; } 50%{ opacity:1; } }
+  .gesture-link.shake{ animation:gestureShake .45s ease; }
+  @keyframes gestureShake{
+    0%,100%{ transform:translateX(0); }
+    25%{ transform:translateX(-4px); }
+    75%{ transform:translateX(4px); }
+  }
+
+  /* camera feed used only for hand tracking — never rendered on screen */
+  .gesture-preview{
+    position:fixed;top:0;left:0;
+    width:1px;height:1px;
+    overflow:hidden;
+    opacity:0;
+    pointer-events:none;
+  }
+
+  /* info panel — a translucent glass card that fades in, well after the
+     leaf/ring effect. Leaf mark up top, the tagline again as the headline,
+     then a translucent email field to actually join the waitlist. */
+  .info-modal{
+    position:fixed;inset:0;z-index:50;
+    display:flex;align-items:center;justify-content:center;
+    background:rgba(20,20,20,0);pointer-events:none;
+    transition:background 1.1s ease;
+  }
+  .info-modal.open{ background:rgba(20,20,20,.55);pointer-events:auto; }
+  .info-panel{
+    width:min(420px,88vw);
+    max-height:calc(100vh - 32px);
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+    background:rgba(255,255,255,.08);
+    -webkit-backdrop-filter:blur(26px);
+    backdrop-filter:blur(26px);
+    border:1px solid rgba(255,255,255,.22);
+    border-radius:28px;
+    padding:40px 32px 34px;
+    box-shadow:0 40px 90px rgba(20,20,20,.35);
+    position:relative;
+    display:flex;flex-direction:column;align-items:center;gap:22px;
+    text-align:center;
+    transform:translateY(24px) scale(.94);opacity:0;
+    transition:transform 1s cubic-bezier(.16,1,.3,1), opacity 1.15s ease;
+  }
+  .info-modal.open .info-panel{ transform:translateY(0) scale(1);opacity:1; }
+  .info-close{
+    position:absolute;top:18px;right:18px;width:36px;height:36px;
+    border-radius:50%;border:none;background:rgba(255,255,255,.12);
+    color:#fff;font-size:18px;line-height:1;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+    transition:background .2s ease;
+    touch-action:manipulation;
+  }
+  .info-close:hover{ background:rgba(255,255,255,.22); }
+  /* the same leaf mark as the hero, shrunk down */
+  .info-dna-slot{
+    position:relative;
+    width:64px;height:64px;
+    filter:drop-shadow(0 10px 20px rgba(158,32,39,.35));
+  }
+  .info-title{
+    font-size:18px;font-weight:800;letter-spacing:-.01em;line-height:1.4;
+    color:#fff;margin:0;
+    transition:opacity .3s ease;
+  }
+
+  /* terminal-style status line under the logo — a monospace "console"
+     prompt that types its message out character by character, cursor
+     blinking after. Leans into the "OS" framing instead of a chat bubble
+     or a plain label. */
+  .info-tooltip{
+    display:flex;align-items:center;
+    font-family:'SFMono-Regular',ui-monospace,Menlo,Consolas,monospace;
+    font-size:12px;color:rgba(255,255,255,.6);letter-spacing:.01em;
+    margin-top:-8px;
+  }
+  .info-tooltip .prompt{
+    color:var(--red);font-weight:700;margin-right:7px;
+    animation:cursorBlink 1s steps(1) infinite; /* the ">" itself blinks like a prompt — no separate caret box */
+  }
+  @keyframes cursorBlink{ 0%,49%{ opacity:1; } 50%,100%{ opacity:.25; } }
+
+  /* stacked form fields — email + phone, both plain full-width pills, with
+     the submit arrow as its own centered row underneath */
+  .info-fields{
+    display:flex;flex-direction:column;align-items:center;gap:14px;width:100%;
+  }
+  .info-input{
+    width:100%;height:52px;
+    padding:0 20px;
+    border-radius:999px;
+    background:rgba(255,255,255,.1);
+    border:1px solid rgba(255,255,255,.28);
+    color:#fff;
+    font-size:16px;font-family:inherit; /* 16px, not 15px — iOS Safari auto-zooms the page on inputs under 16px */
+    transition:background .2s ease, border-color .2s ease;
+  }
+  .info-input::placeholder{ color:rgba(255,255,255,.55); }
+  .info-input:focus{
+    outline:none;
+    background:rgba(255,255,255,.16);
+    border-color:rgba(255,255,255,.5);
+  }
+  /* phone row: a fixed "+91" prefix sits inside the same pill, to the left
+     of the digits-only input */
+  .info-phone-row{ position:relative;width:100%; }
+  .phone-prefix{
+    position:absolute;left:20px;top:50%;transform:translateY(-50%);
+    color:rgba(255,255,255,.65);
+    font-size:16px;font-family:inherit;
+    pointer-events:none;
+  }
+  .phone-input{ padding-left:54px; letter-spacing:.3px; }
+  /* default: dim/translucent, looks inert until both fields are filled */
+  .info-email-submit{
+    width:100%;height:52px;border-radius:999px;
+    background:rgba(255,255,255,.06);
+    border:1px solid rgba(255,255,255,.1);
+    cursor:not-allowed;
+    display:flex;align-items:center;justify-content:center;gap:8px;
+    transition:background .2s ease, border-color .2s ease, color .2s ease;
+    margin-top:2px;
+    font-size:15px;font-weight:400;font-family:inherit;
+    color:rgba(255,255,255,.35);
+    touch-action:manipulation;
+  }
+  .info-email-submit svg{ width:17px;height:17px;color:currentColor;flex-shrink:0; }
+  /* ready: both email + phone filled — solid light pill, dark text, clickable */
+  .info-email-submit.ready{
+    background:#ececec;
+    border-color:transparent;
+    color:var(--ink);
+    cursor:pointer;
+  }
+  .info-email-submit.ready:hover{ background:#ffffff; }
+  /* the post-submit success view — tier badge, a big queue number, a
+     playful nudge to share, and a share button. Swaps in for the form. */
+  /* the reward card itself — a self-contained gradient panel nested inside
+     the glass modal. Its color is set inline per-tier by JS (see the
+     TIERS table), not fixed here — only the shape/shadow are static. */
+  .info-success{
+    display:none;
+    width:100%;
+    flex-direction:column;
+    align-items:center;
+    gap:20px;
+    border-radius:24px;
+    padding:36px 26px 30px;
+    box-shadow:0 20px 46px rgba(0,0,0,.35);
+    transition:background 1s ease;
+  }
+  /* ----- rank / quiz bifurcation steps, shown between the fields and the
+     final success view. All four steps (fields, rank, quiz, success) are
+     toggled directly via JS (element.style.display), these classes just
+     supply the default hidden state + layout for the non-fields steps. ----- */
+  .info-rank, .info-quiz, .info-countdown{
+    display:none;width:100%;flex-direction:column;align-items:center;gap:10px;
+  }
+  .rank-label{ font-size:14px;color:rgba(255,255,255,.6); }
+  /* same big thin gradient-text number treatment as the final success
+     screen's queue number, so the rank reads consistently everywhere it
+     appears rather than as a separate colored-pill style here. */
+  .rank-badge{
+    font-size:56px;font-weight:200;letter-spacing:-.02em;line-height:1;
+    margin:-4px 0;
+    background:linear-gradient(180deg, #ffffff 0%, #d8d8d8 100%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+
+  /* "TEST BEGINS IN 3, 2, 1" countdown between the rank reveal and the quiz */
+  .info-countdown{ gap:8px;padding:22px 0; }
+  .countdown-label{
+    font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+    color:rgba(255,255,255,.45);
+  }
+  .countdown-number{
+    font-size:56px;font-weight:200;color:#fff;line-height:1;
+    animation:countdownTick .55s cubic-bezier(.16,1,.3,1) both;
+  }
+  .countdown-number.retrig{ animation:countdownTick .55s cubic-bezier(.16,1,.3,1) both; }
+  @keyframes countdownTick{
+    from{ opacity:0;transform:scale(.7); }
+    to{ opacity:1;transform:scale(1); }
+  }
+  .rank-note{ font-size:13px;color:rgba(255,255,255,.5);margin-top:-6px; }
+  .rank-copy{ font-size:14px;color:rgba(255,255,255,.75);max-width:320px;text-align:center; }
+  .rank-btn{
+    width:100%;height:52px;border-radius:999px;border:none;cursor:pointer;
+    font-size:15px;font-family:inherit;font-weight:600;
+    transition:background .2s ease, color .2s ease, border-color .2s ease;
+    touch-action:manipulation;
+  }
+  .rank-btn.primary{ background:#ececec;color:var(--ink); }
+  .rank-btn.primary:hover{ background:#fff; }
+  .rank-btn.ghost{
+    background:rgba(255,255,255,.06);color:rgba(255,255,255,.6);
+    border:1px solid rgba(255,255,255,.16);
+  }
+  .rank-btn.ghost:hover{ background:rgba(255,255,255,.12);color:#fff; }
+
+  .info-quiz{ align-items:stretch;gap:16px;text-align:left; }
+  .quiz-progress{
+    font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+    color:rgba(255,255,255,.45);
+  }
+  .quiz-question{
+    font-size:18px;font-weight:700;color:#fff;line-height:1.4;margin:0;text-align:left;
+    animation:questionIn .4s cubic-bezier(.16,1,.3,1) both;
+  }
+  .quiz-question.retrig{ animation:questionIn .4s cubic-bezier(.16,1,.3,1) both; }
+  @keyframes questionIn{
+    from{ opacity:0;transform:translateY(8px); }
+    to{ opacity:1;transform:translateY(0); }
+  }
+  .quiz-answers{ display:flex;flex-direction:column;gap:10px; }
+  .quiz-choice{
+    width:100%;text-align:left;padding:14px 18px;border-radius:16px;
+    background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.16);
+    color:#fff;font-size:14.5px;font-family:inherit;cursor:pointer;
+    transition:background .2s ease, border-color .2s ease, transform .2s ease;
+    touch-action:manipulation;
+  }
+  .quiz-choice:hover{ background:rgba(255,255,255,.1); }
+  .quiz-choice.selected{
+    background:rgba(158,32,39,.28);border-color:rgba(198,40,49,.6);
+    transform:scale(1.015);
+  }
+  .quiz-slider-wrap{ display:flex;flex-direction:column;gap:12px; }
+  .quiz-slider-value{ font-size:24px;font-weight:700;color:#fff; }
+  .quiz-slider{ width:100%;accent-color:#9e2027;height:32px; } /* taller hit area for a thumb on touch */
+
+  /* small outlined pill above the queue number — the visitor's tier,
+     set from the TIERS table in JS based on final rank */
+  .tier-badge{
+    font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;
+    color:#fff;
+    border:1px solid rgba(255,255,255,.55);
+    padding:8px 20px;border-radius:999px;
+  }
+  .queue-big{
+    font-size:56px;font-weight:200;line-height:1;
+    letter-spacing:-.02em;
+    background:linear-gradient(180deg, #ffffff 0%, #cfe4d4 100%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+  .queue-sub{
+    margin-top:-10px;
+    font-size:14px;color:rgba(255,255,255,.85);
+    display:flex;align-items:center;justify-content:center;gap:6px;
+  }
+  .queue-sub-logo{ width:15px;height:15px;flex-shrink:0; }
+  .share-nudge{ width:100%; }
+  .share-nudge .share-line{ font-size:14px;font-weight:700;color:#fff;margin:0;text-align:center; }
+  .share-btn{
+    width:100%;height:52px;
+    border-radius:999px;
+    background:#fff;color:var(--ink);
+    border:none;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;gap:8px;
+    font-size:15px;font-weight:700;font-family:inherit;
+    transition:background .2s ease;
+    touch-action:manipulation;
+  }
+  .share-btn:hover{ background:#f1f1f1; }
+  .share-btn svg{ width:18px;height:18px;flex-shrink:0; }
+
+  .stray-dot{
+    position:fixed;border-radius:50%;background:var(--red);
+    animation: float 6s ease-in-out infinite;
+    box-shadow:0 0 10px rgba(158,32,39,.4);
+  }
+  @keyframes float{
+    0%,100%{ transform:translateY(0);}
+    50%{ transform:translateY(-12px);}
+  }
+
+  .logo-slot{
+    position:relative;
+    width:104px;height:104px;
+  }
+  .logo{
+    position:absolute;inset:0;width:100%;height:100%;
+    transition:opacity .3s ease;
+  }
+  /* the hero leaf's own glow still shows through the modal's translucent
+     backdrop and reads as floating in front of the glass panel — so hide
+     it outright once the panel is open, and bring it back once dismissed */
+  .logo.behind-modal{ opacity:0; }
+
+  /* ================= MOBILE TUNING =================
+     Everything above is shared with the desktop version. These overrides
+     only kick in on phone-width viewports: tighter type scale so the big
+     rank/queue numbers and the modal padding don't overwhelm a small
+     screen, a taller/full-bleed-ish panel that scrolls internally instead
+     of overflowing the viewport, bigger touch targets, and the hand-gesture
+     affordance hidden (pinching at your own front camera one-handed while
+     holding the phone isn't a realistic gesture — that feature stays
+     desktop/webcam-only). */
+  @media (max-width: 560px){
+    .hero{ gap:26px; }
+    .tagline{ font-size:15px;max-width:250px; }
+    /* narrower than before, so it clears the ring's curved edge with margin
+       instead of poking past it */
+    .cta-box{ width:min(280px,78vw);height:58px; }
+    .cta-handle{ width:50px;height:50px;margin-top:-25px; }
+    .cta-label{ font-size:14.5px; }
+    .gesture-row{ display:none; }
+    /* on portrait phones, vmax is dominated by the (much taller) height,
+       so the desktop ring-c/-b sizing left them too small to actually
+       enclose the logo+tagline+CTA stack — that's why it was overflowing
+       past the ring's border. Size these off vw instead, which is the
+       narrower/constraining dimension here, so the rings scale with the
+       content column and properly wrap around it with room to spare. */
+    .ring-c{ width:82vw;height:82vw; }
+    .ring-b{ width:118vw;height:118vw; }
+
+    .info-panel{
+      width:92vw;
+      padding:32px 20px calc(26px + env(safe-area-inset-bottom));
+      border-radius:24px;
+      gap:18px;
+    }
+    .info-title{ font-size:16px; }
+    .rank-badge{ font-size:48px; }
+    .countdown-number{ font-size:48px; }
+    .queue-big{ font-size:48px; }
+    .tier-badge{ font-size:10px;padding:7px 16px; }
+    .quiz-question{ font-size:16.5px; }
+  }
+
+  @media (max-width: 380px){
+    .info-panel{ padding:26px 16px calc(22px + env(safe-area-inset-bottom)); }
+    .rank-badge{ font-size:42px; }
+    .queue-big{ font-size:42px; }
+    .countdown-number{ font-size:42px; }
+  }
+
+  /* short/landscape phones — the panel can get taller than the viewport,
+     let it scroll internally rather than clip */
+  @media (max-height: 620px){
+    .info-panel{ padding-top:26px;padding-bottom:22px;gap:14px; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="dots"></canvas>
+
+<div class="scene" id="scene">
+  <div class="rings">
+    <div class="ring ring-a">
+      <span class="orbit-dot" style="left:74%; top:8.4%;"></span>
+      <span class="orbit-dot sm" style="left:91.6%; top:74%;"></span>
+      <span class="orbit-dot" style="left:26%; top:91.6%;"></span>
+      <span class="orbit-dot sm" style="left:8.4%; top:26%;"></span>
+    </div>
+    <div class="ring ring-b">
+      <span class="orbit-dot" style="left:50%; top:2%;"></span>
+      <span class="orbit-dot sm" style="left:98%; top:50%;"></span>
+      <span class="orbit-dot" style="left:50%; top:98%;"></span>
+      <span class="orbit-dot sm" style="left:2%; top:50%;"></span>
+    </div>
+    <div class="ring ring-c">
+      <span class="orbit-dot sm" style="left:91.6%; top:26%;"></span>
+      <span class="orbit-dot sm" style="left:8.4%; top:74%;"></span>
+    </div>
+  </div>
+
+  <div class="hero">
+    <div class="brand-stack">
+      <div class="logo-slot">
+        <svg class="logo" viewBox="-2 -2 104 104" xmlns="http://www.w3.org/2000/svg">
+          <path d="M30.43,1.13 C67.60,2.44 96.83,33.80 95.51,70.98 L94.49,99.90 L65.57,98.88 C28.40,97.56 -0.83,66.20 0.49,29.02 L1.51,0.11 Z" fill="#9e2027"/>
+        </svg>
+      </div>
+    </div>
+
+    <!-- tagline, in plain document flow above the box -->
+    <p class="tagline">The world's first OS that turns your health data into food.</p>
+
+    <!-- the CTA box — fixed in place. Only the arrow handle inside drags. -->
+    <div class="cta-row">
+      <div class="cta-box" id="ctaBox" role="button" tabindex="0">
+        <span class="cta-label" id="ctaLabel">Join the waitlist</span>
+        <div class="cta-handle" id="ctaHandle">
+          <svg class="arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- small caption under the CTA: pinch thumb + index together in the
+         air, then slide right, to join the same way as dragging the handle.
+         Hidden on phone widths (see the mobile media query above). -->
+    <div class="gesture-row">
+      <button type="button" class="gesture-link" id="gestureToggle">Or <u>enable</u> gesture control to join</button>
+    </div>
+  </div>
+</div>
+
+<!-- info panel, opened by the CTA -->
+<div class="info-modal" id="infoModal">
+  <div class="info-panel" id="infoPanel">
+    <button class="info-close" id="infoClose" aria-label="Close">&times;</button>
+    <div class="info-dna-slot">
+      <svg class="logo" viewBox="-2 -2 104 104" xmlns="http://www.w3.org/2000/svg">
+        <path d="M30.43,1.13 C67.60,2.44 96.83,33.80 95.51,70.98 L94.49,99.90 L65.57,98.88 C28.40,97.56 -0.83,66.20 0.49,29.02 L1.51,0.11 Z" fill="#9e2027"/>
+      </svg>
+    </div>
+    <div class="info-tooltip" id="infoTooltip"><span class="prompt">&gt;</span><span id="infoTooltipText"></span></div>
+    <h3 class="info-title" id="infoTitle">The world's first OS that turns your health data into food.</h3>
+    <form class="info-fields" id="waitlistForm">
+      <input type="email" class="info-input" id="waitlistEmail" placeholder="you@example.com" required>
+      <div class="info-phone-row">
+        <span class="phone-prefix">+91</span>
+        <input type="tel" class="info-input phone-input" id="waitlistPhone" placeholder="9876543210" inputmode="numeric" maxlength="10" required>
+      </div>
+      <button type="submit" class="info-email-submit" id="waitlistSubmit" aria-label="Join the waitlist" disabled>
+        <span>Join the waitlist</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      </button>
+    </form>
+    <!-- step: rank reveal — shown right after email+phone, before the quiz -->
+    <div class="info-rank" id="infoRank">
+      <p class="rank-label">Your rank on the waitlist is</p>
+      <div class="rank-badge" id="rankBadge">#1237</div>
+      <p class="rank-note">but it need not be</p>
+      <p class="rank-copy" id="rankCopy">Answer a few questions (honestly) to move up.</p>
+      <button type="button" class="rank-btn primary" id="bumpMeUpBtn">Bump me up</button>
+      <button type="button" class="rank-btn ghost" id="skipQuizBtn">I'll wait my turn</button>
+    </div>
+
+    <!-- step: brief "TEST BEGINS IN 3, 2, 1" countdown before the quiz -->
+    <div class="info-countdown" id="infoCountdown">
+      <p class="countdown-label">Test begins in</p>
+      <div class="countdown-number" id="countdownNumber">3</div>
+    </div>
+
+    <!-- step: the quiz itself — one question at a time. The rank is tracked
+         silently in the background as answers are committed (never shown
+         live while dragging/hovering) and only revealed once, on the final
+         success screen. -->
+    <div class="info-quiz" id="infoQuiz">
+      <span class="quiz-progress" id="quizProgress">Question 1 of 4</span>
+      <h4 class="quiz-question" id="quizQuestion"></h4>
+      <div class="quiz-answers" id="quizAnswers"></div>
+      <button type="button" class="rank-btn primary" id="quizNextBtn" disabled>Next</button>
+    </div>
+
+    <div class="info-success" id="infoSuccess">
+      <div class="tier-badge" id="tierBadge">Standby Tier</div>
+      <div class="queue-big"><span id="queueNumber">1237</span></div>
+      <p class="queue-sub">in the
+        <svg class="queue-sub-logo" viewBox="-2 -2 104 104" xmlns="http://www.w3.org/2000/svg">
+          <path d="M30.43,1.13 C67.60,2.44 96.83,33.80 95.51,70.98 L94.49,99.90 L65.57,98.88 C28.40,97.56 -0.83,66.20 0.49,29.02 L1.51,0.11 Z" fill="currentColor"/>
+        </svg>
+        waitlist</p>
+      <div class="share-nudge">
+        <p class="share-line">Share the news to get early access.</p>
+      </div>
+      <button type="button" class="share-btn" id="shareBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 8l5-5 5 5M5 21h14"/></svg>
+        <span id="shareLabel">Share the news</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<span class="stray-dot" style="width:8px;height:8px; left:2%; top:9%; animation-delay:.2s;"></span>
+<span class="stray-dot" style="width:7px;height:7px; left:14%; top:58%; animation-delay:1.1s;"></span>
+<span class="stray-dot" style="width:6px;height:6px; left:4%; top:88%; animation-delay:2s;"></span>
+<span class="stray-dot" style="width:8px;height:8px; left:97%; top:6%; animation-delay:.7s;"></span>
+<span class="stray-dot" style="width:6px;height:6px; left:98%; top:80%; animation-delay:1.6s;"></span>
+<span class="stray-dot" style="width:9px;height:9px; left:64%; top:90%; animation-delay:2.4s;"></span>
+
+<!-- camera feed for the pinch-and-slide gesture — started by the small
+     "enable hand gesture" text under the CTA; kept off-screen at all times,
+     it's only read in memory to track the pinch, never shown to the visitor -->
+<div class="gesture-preview" id="gesturePreview">
+  <video id="gestureVideo" autoplay playsinline muted></video>
+  <canvas id="gestureCanvas"></canvas>
+</div>
+
+<script>
+  // Branching blood-vessel network — procedurally grown once per resize,
+  // with a handful of glowing pulses (like blood cells) travelling along it.
+  // The branching structure itself is seeded so it comes out identical on
+  // every load/reload (same shape every time) — only the travelling pulses
+  // still use real randomness, so they don't feel robotic.
+  const canvas = document.getElementById('dots');
+  const ctx = canvas.getContext('2d');
+  let w, h, dpr;
+  let vessels = [];
+  let pulses = [];
+  const rand = (a, b) => a + Math.random() * (b - a);
+
+  const VESSEL_SEED = 20260729;
+  function mulberry32(seed){
+    return function(){
+      seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+      let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+  let seededRand;
+  function srand(a, b){ return a + seededRand() * (b - a); }
+
+  function resize(){
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    w = window.innerWidth; h = window.innerHeight;
+    canvas.width = w * dpr; canvas.height = h * dpr;
+    canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    buildVessels();
+  }
+
+  function branch(x, y, angle, length, depth){
+    if (depth <= 0 || length < 6) return;
+    const x2 = x + Math.cos(angle) * length;
+    const y2 = y + Math.sin(angle) * length;
+    vessels.push({ x1:x, y1:y, x2, y2, width: Math.max(.4, depth * .55) });
+    branch(x2, y2, angle + srand(-.3,.3), length * .82, depth - 1);
+    if (srand(0,1) < .6) {
+      const side = srand(0,1) < .5 ? -1 : 1;
+      branch(x2, y2, angle + side * srand(.5,1.05), length * .6, depth - 2);
+    }
+  }
+
+  function buildVessels(){
+    seededRand = mulberry32(VESSEL_SEED); // reset so the same w/h always grows the same tree
+    vessels = [];
+    const roots = 5;
+    for (let i = 0; i < roots; i++) {
+      const edge = Math.floor(srand(0,4));
+      let x, y, angle;
+      if (edge === 0){ x = srand(0,w); y = -10; angle = Math.PI/2; }
+      else if (edge === 1){ x = w+10; y = srand(0,h); angle = Math.PI; }
+      else if (edge === 2){ x = srand(0,w); y = h+10; angle = -Math.PI/2; }
+      else { x = -10; y = srand(0,h); angle = 0; }
+
+      const before = vessels.length;
+      branch(x, y, angle + srand(-.4,.4), srand(140,220), 7);
+      if (edge !== 1) {
+        // this root wasn't anchored on the right — drop what it grew, the
+        // left/top side gets filled by mirroring the right side instead
+        vessels.length = before;
+      }
+    }
+    // at this point `vessels` holds only the right-anchored growth, which
+    // sits in the bottom half of the frame — the vessel shape that already
+    // looks good. Mirror it through the center (flip both x and y) so its
+    // reflection lands top-left instead of just bottom-left
+    const rightSegs = vessels.slice();
+    rightSegs.forEach(v => {
+      vessels.push({ x1: w - v.x1, y1: h - v.y1, x2: w - v.x2, y2: h - v.y2, width: v.width });
+    });
+
+    pulses = [];
+    for (let i = 0; i < 7; i++) spawnPulse();
+  }
+
+  function spawnPulse(){
+    if (!vessels.length) return;
+    pulses.push({ seg: vessels[Math.floor(Math.random()*vessels.length)], t: Math.random(), speed: rand(.15,.3) });
+  }
+
+  function draw(){
+    ctx.clearRect(0,0,w,h);
+    ctx.strokeStyle = 'rgba(158,32,39,.22)';
+    ctx.lineCap = 'round';
+    for (const v of vessels) {
+      ctx.lineWidth = v.width;
+      ctx.beginPath();
+      ctx.moveTo(v.x1, v.y1);
+      ctx.lineTo(v.x2, v.y2);
+      ctx.stroke();
+    }
+    for (const p of pulses) {
+      p.t += p.speed * 0.016;
+      if (p.t > 1) { p.t = 0; p.seg = vessels[Math.floor(Math.random()*vessels.length)]; }
+      const x = p.seg.x1 + (p.seg.x2 - p.seg.x1) * p.t;
+      const y = p.seg.y1 + (p.seg.y2 - p.seg.y1) * p.t;
+      ctx.beginPath();
+      ctx.arc(x, y, 2.4, 0, Math.PI*2);
+      ctx.fillStyle = 'rgba(200,55,50,.9)';
+      ctx.shadowColor = 'rgba(158,32,39,.8)';
+      ctx.shadowBlur = 8;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+    requestAnimationFrame(draw);
+  }
+
+  window.addEventListener('resize', resize);
+
+  resize();
+  requestAnimationFrame(draw);
+
+  // subtle parallax "zoom" toward cursor on the whole scene (mouse only —
+  // touch devices simply never fire mousemove, so this is a no-op there)
+  const scene = document.getElementById('scene');
+  window.addEventListener('mousemove', e => {
+    const nx = (e.clientX / window.innerWidth - 0.5) * 2;
+    const ny = (e.clientY / window.innerHeight - 0.5) * 2;
+    scene.style.transform = `scale(1.02) translate(${nx * -8}px, ${ny * -8}px)`;
+  });
+
+  // CTA — opens the placeholder panel once the leaf effect finishes
+  const ctaBox = document.getElementById('ctaBox');
+  const modal = document.getElementById('infoModal');
+  const closeBtn = document.getElementById('infoClose');
+  const gestureRow = document.querySelector('.gesture-row');
+
+  function retrigger(el, cls){
+    el.classList.remove(cls);
+    void el.offsetWidth; // restart animation
+    el.classList.add(cls);
+  }
+
+  // ----- leaf stays exactly as it is — activation only glows the ring
+  // outlines and speeds up their spin -----
+  const ringsWrap = document.querySelector('.rings');
+  const logo = document.querySelector('.logo');
+  const PLACEHOLDER_DELAY_MS = 1800; // let the glowing rings play out before the panel appears
+
+  function resetLeafEffect(){
+    ringsWrap.classList.remove('glow', 'fast');
+    logo.classList.remove('behind-modal'); // leaf fades back in once the panel is dismissed
+    ctaBox.classList.remove('dragging'); // back to black once the panel is dismissed
+    ctaBox.classList.remove('sent'); // and fades back in, ready to use again
+    gestureRow.classList.remove('sent'); // the gesture caption reappears too
+  }
+
+  function playLeafEffect(){
+    resetLeafEffect();
+    // the ring outlines glow red, and every ring (all the small circles
+    // riding on them) speeds up together
+    ringsWrap.classList.add('glow', 'fast');
+  }
+
+  function activateStart(){
+    retrigger(ctaBox, 'ripple');
+    playLeafEffect(); // this calls resetLeafEffect() internally, which clears 'dragging'/'sent' — so add them after
+    ctaBox.classList.add('dragging'); // stays red once triggered, whether by drag or tap
+    setTimeout(() => {
+      ctaBox.classList.add('sent'); // the whole CTA fades away, after the red flash is seen
+      gestureRow.classList.add('sent'); // and the gesture caption fades with it
+    }, 400);
+    setTimeout(() => {
+      modal.classList.add('open');
+      logo.classList.add('behind-modal'); // hide the leaf right as the glass panel appears
+      setTooltip(TOOLTIP_DEFAULT); // start the type-in right as the panel actually becomes visible
+    }, PLACEHOLDER_DELAY_MS);
+  }
+
+  // ----- the CTA box never moves — it IS the track. Only the light circular
+  // handle drags across it, left to right. Drag it far enough and it fires
+  // the CTA, then eases back to the start; let go early and it just springs
+  // back. The label fades as the handle nears it so they never collide.
+  // A plain tap on the box (outside the handle) still works too. Pointer
+  // events unify mouse/touch/pen, so this already works on phones. -----
+  const ctaHandle = document.getElementById('ctaHandle');
+  const ctaLabel = document.getElementById('ctaLabel');
+  const HANDLE_MARGIN = 4; // matches the handle's inset in .cta-box
+  let maxTravel = 0;
+
+  function measureTrack(){
+    maxTravel = ctaBox.getBoundingClientRect().width - ctaHandle.getBoundingClientRect().width - HANDLE_MARGIN * 2;
+  }
+
+  let dragging = false;
+  let dragged = false;
+  let dragStartX = 0;
+  let lastProgress = 0;
+
+  function setHandleProgress(p, animate){
+    lastProgress = p;
+    ctaHandle.style.transition = animate ? 'transform .4s cubic-bezier(.16,1,.3,1)' : 'none';
+    ctaLabel.style.transition = animate ? 'opacity .4s ease' : 'none';
+    ctaHandle.style.transform = `translateX(${maxTravel * p}px)`;
+    ctaLabel.style.opacity = Math.max(0, 1 - p * 1.6); // fades before the handle reaches it
+  }
+
+  measureTrack();
+  setHandleProgress(0, false);
+  window.addEventListener('resize', () => { measureTrack(); if (!dragging) setHandleProgress(lastProgress, false); });
+
+  ctaHandle.addEventListener('pointerdown', (e) => {
+    measureTrack();
+    dragging = true;
+    dragged = false;
+    dragStartX = e.clientX;
+    ctaHandle.setPointerCapture(e.pointerId);
+    ctaHandle.classList.add('grabbing');
+    ctaBox.classList.add('dragging');
+    e.stopPropagation();
+  });
+
+  ctaHandle.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    const dx = e.clientX - dragStartX;
+    if (Math.abs(dx) > 3) dragged = true;
+    const p = Math.min(1, Math.max(0, dx / maxTravel));
+    setHandleProgress(p, false);
+  });
+
+  function endDrag(){
+    if (!dragging) return;
+    dragging = false;
+    ctaHandle.classList.remove('grabbing');
+    if (dragged && lastProgress >= 0.7) {
+      setHandleProgress(1, true); // reached the end
+      activateStart(); // keeps the box red — see activateStart()
+      setTimeout(() => setHandleProgress(0, true), PLACEHOLDER_DELAY_MS);
+    } else {
+      ctaBox.classList.remove('dragging'); // didn't go far enough — back to black
+      setHandleProgress(0, true); // springs back
+    }
+  }
+  ctaHandle.addEventListener('pointerup', endDrag);
+  ctaHandle.addEventListener('pointercancel', endDrag);
+
+  // a plain tap on the arrow itself (no drag) fires the same join action
+  // as tapping the rest of the box — only a real drag is handled separately
+  // above by endDrag(), so we don't double-trigger here
+  ctaHandle.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (dragged) { dragged = false; return; }
+    activateStart();
+  });
+
+  ctaBox.addEventListener('click', () => {
+    if (dragged) { dragged = false; return; } // the drag already triggered it
+    activateStart();
+  });
+
+  function closeModal(){
+    modal.classList.remove('open');
+    resetLeafEffect();
+    setHandleProgress(0, true);
+    if (queueAnimRafId) cancelAnimationFrame(queueAnimRafId); // stop the count-up if it's still running
+    infoPanel.classList.remove('submitted'); // reset the form for next time
+    waitlistEmail.value = '';
+    waitlistPhone.value = '';
+    updateSubmitState();
+    if (countdownIntervalId) { clearInterval(countdownIntervalId); countdownIntervalId = null; }
+    if (tooltipTypeTimeoutId) { clearTimeout(tooltipTypeTimeoutId); tooltipTypeTimeoutId = null; }
+    bumpMeUpBtn.disabled = false;
+    skipQuizBtn.disabled = false;
+    setTooltip(TOOLTIP_DEFAULT);
+    showStep('fields'); // back to the email+phone form for next time
+  }
+  closeBtn.addEventListener('click', closeModal);
+  modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+  window.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+  // ----- translucent waitlist form inside the panel -----
+  const infoPanel = document.getElementById('infoPanel');
+  const waitlistForm = document.getElementById('waitlistForm');
+  const waitlistEmail = document.getElementById('waitlistEmail');
+  const waitlistPhone = document.getElementById('waitlistPhone');
+  const waitlistSubmit = document.getElementById('waitlistSubmit');
+  const queueNumberEl = document.getElementById('queueNumber');
+
+  // phone field only ever holds raw digits (the "+91" prefix is a separate,
+  // static label) — strip anything non-numeric as the visitor types and cap
+  // at 10 digits
+  function isPhoneValid(){ return /^[0-9]{10}$/.test(waitlistPhone.value); }
+
+  waitlistPhone.addEventListener('input', () => {
+    waitlistPhone.value = waitlistPhone.value.replace(/\D/g, '').slice(0, 10);
+    updateSubmitState();
+  });
+
+  // submit button stays dim/inert until a valid email and a full 10-digit
+  // phone number are both entered, then flips to the solid light "ready" state
+  function updateSubmitState(){
+    const ready = waitlistEmail.value.trim() !== '' && waitlistEmail.checkValidity() && isPhoneValid();
+    waitlistSubmit.classList.toggle('ready', ready);
+    waitlistSubmit.disabled = !ready;
+  }
+  waitlistEmail.addEventListener('input', updateSubmitState);
+
+  // queue position always starts counting up from 1236, so the very first
+  // signup lands on 1237 — makes the list look already-inflated with demand.
+  // Persisted in localStorage so it keeps climbing on every real submission.
+  const QUEUE_BASE = 1236;
+  function nextQueuePosition(){
+    const stored = parseInt(localStorage.getItem('waitlistQueuePosition'), 10);
+    const current = Number.isFinite(stored) ? stored : QUEUE_BASE;
+    const next = current + 1;
+    localStorage.setItem('waitlistQueuePosition', String(next));
+    return next;
+  }
+
+  // counts up from 1 to the visitor's actual queue position, easing out
+  // toward the end so it settles rather than snapping to a stop
+  let queueAnimRafId = null;
+  function animateQueueNumber(el, target, duration){
+    if (queueAnimRafId) cancelAnimationFrame(queueAnimRafId);
+    const startTime = performance.now();
+    el.textContent = '1';
+    function tick(now){
+      const t = Math.min(1, (now - startTime) / duration);
+      const eased = 1 - Math.pow(1 - t, 3); // ease-out cubic
+      const value = Math.round(1 + (target - 1) * eased);
+      el.textContent = value.toLocaleString();
+      if (t < 1) {
+        queueAnimRafId = requestAnimationFrame(tick);
+      } else {
+        el.textContent = target.toLocaleString(); // land on the exact number
+        queueAnimRafId = null;
+      }
+    }
+    queueAnimRafId = requestAnimationFrame(tick);
+  }
+
+  // ----- rank reveal + "bump me up" quiz — bifurcates signups by premium
+  // fit. After email+phone, show a (mostly fake) queue rank, then let the
+  // visitor optionally answer a few questions; each answer nudges the rank
+  // and contributes to a score. High scorers are tagged "premium" and get
+  // a bigger rank jump — same beat as the tellm.co/rank reference. -----
+  const infoRank = document.getElementById('infoRank');
+  const infoCountdown = document.getElementById('infoCountdown');
+  const infoQuiz = document.getElementById('infoQuiz');
+  const rankBadge = document.getElementById('rankBadge');
+  const rankCopy = document.getElementById('rankCopy');
+  const bumpMeUpBtn = document.getElementById('bumpMeUpBtn');
+  const skipQuizBtn = document.getElementById('skipQuizBtn');
+  const countdownNumber = document.getElementById('countdownNumber');
+  const quizProgress = document.getElementById('quizProgress');
+  const quizQuestionEl = document.getElementById('quizQuestion');
+  const quizAnswersEl = document.getElementById('quizAnswers');
+  const quizNextBtn = document.getElementById('quizNextBtn');
+  const tierBadge = document.getElementById('tierBadge');
+  const infoTooltipText = document.getElementById('infoTooltipText');
+  const RANK_COPY_DEFAULT = rankCopy.textContent;
+  const TOOLTIP_DEFAULT = "let's get you on the list";
+
+  const STEPS = { fields: waitlistForm, rank: infoRank, countdown: infoCountdown, quiz: infoQuiz, success: infoSuccess };
+  function showStep(name){
+    Object.entries(STEPS).forEach(([key, el]) => { el.style.display = key === name ? 'flex' : 'none'; });
+  }
+
+  // "console" status line — types the message out a character at a time
+  // instead of just swapping text, then leaves the cursor blinking
+  let tooltipTypeTimeoutId = null;
+  function setTooltip(text){
+    if (tooltipTypeTimeoutId) clearTimeout(tooltipTypeTimeoutId);
+    infoTooltipText.textContent = '';
+    let i = 0;
+    function typeNext(){
+      infoTooltipText.textContent = text.slice(0, i);
+      if (i < text.length) {
+        i++;
+        tooltipTypeTimeoutId = setTimeout(typeNext, 22);
+      } else {
+        tooltipTypeTimeoutId = null;
+      }
+    }
+    typeNext();
+  }
+
+  // indirect proxies for premium fit — none of these ask about money or
+  // affordability directly. Wearable use, how the diet is managed, lab
+  // check-up frequency, and supplement use all correlate with how invested
+  // someone already is in tracking their own health, without ever asking
+  // "what's your budget"
+  const QUIZ_QUESTIONS = [
+    {
+      type: 'choice',
+      tooltip: 'Be honest',
+      question: 'Do you track your health with a wearable?',
+      options: [
+        { label: "No, not really", score: 0, delta: 80 },
+        { label: 'Occasionally', score: 1, delta: -80 },
+        { label: 'Yes — Fitbit, Whoop, Oura, Apple Watch…', score: 2, delta: -260 }
+      ]
+    },
+    {
+      type: 'choice',
+      tooltip: 'Next up',
+      question: 'How do you plan your meals day to day?',
+      options: [
+        { label: 'I decide day-of, no real plan', score: 0, delta: 80 },
+        { label: 'I meal prep a few times a week', score: 1, delta: -100 },
+        { label: 'I follow a strict plan or macros', score: 2, delta: -260 }
+      ]
+    },
+    {
+      type: 'choice',
+      tooltip: 'Almost there',
+      question: 'How often do you get blood tests done?',
+      options: [
+        { label: 'Rarely, only when a doctor advises', score: 0, delta: 120 },
+        { label: 'About once a year', score: 1, delta: -60 },
+        { label: 'Every few months — I track my biomarkers', score: 2, delta: -300 }
+      ]
+    },
+    {
+      type: 'choice',
+      tooltip: 'Last one, we promise',
+      question: 'Do you take any health supplements (B12, zinc, etc.)?',
+      options: [
+        { label: 'No, none', score: 0, delta: 90 },
+        { label: "Yes, prescribed by a doctor", score: 1, delta: -90 },
+        { label: 'Yes, unprompted, just habit', score: 2, delta: -260 }
+      ]
+    }
+  ];
+
+  let baseRank = 0;
+  let currentRank = 0;
+  let quizIndex = 0;
+  let quizScore = 0;
+  let pendingScore = 0;
+  let pendingDelta = 0;
+
+  function renderQuizQuestion(){
+    const q = QUIZ_QUESTIONS[quizIndex];
+    quizProgress.textContent = `Question ${quizIndex + 1} of ${QUIZ_QUESTIONS.length}`;
+    quizQuestionEl.textContent = q.question;
+    retrigger(quizQuestionEl, 'retrig');
+    setTooltip(q.tooltip);
+    quizAnswersEl.innerHTML = '';
+    quizNextBtn.disabled = true;
+    pendingScore = 0;
+    pendingDelta = 0;
+
+    if (q.type === 'slider') {
+      const wrap = document.createElement('div');
+      wrap.className = 'quiz-slider-wrap';
+      const valueEl = document.createElement('div');
+      valueEl.className = 'quiz-slider-value';
+      valueEl.textContent = q.prefix + '0';
+      const slider = document.createElement('input');
+      slider.type = 'range';
+      slider.className = 'quiz-slider';
+      slider.min = q.min; slider.max = q.max; slider.step = q.step; slider.value = q.min;
+      slider.addEventListener('input', () => {
+        const val = Number(slider.value);
+        valueEl.textContent = q.prefix + val.toLocaleString();
+        pendingScore = q.score(val);
+        pendingDelta = q.delta(val);
+        // no live rank/score feedback here — the rank only updates once "Next" is clicked
+        quizNextBtn.disabled = false;
+      });
+      wrap.appendChild(valueEl);
+      wrap.appendChild(slider);
+      quizAnswersEl.appendChild(wrap);
+    } else {
+      q.options.forEach(opt => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'quiz-choice';
+        btn.textContent = opt.label;
+        btn.addEventListener('click', () => {
+          quizAnswersEl.querySelectorAll('.quiz-choice').forEach(b => b.classList.remove('selected'));
+          btn.classList.add('selected');
+          pendingScore = opt.score;
+          pendingDelta = opt.delta;
+          // no live rank/score feedback here — the rank only updates once "Next" is clicked
+          quizNextBtn.disabled = false;
+        });
+        quizAnswersEl.appendChild(btn);
+      });
+    }
+  }
+
+  function startQuiz(){
+    quizIndex = 0;
+    quizScore = 0;
+    currentRank = baseRank;
+    renderQuizQuestion();
+    showStep('quiz');
+  }
+
+  quizNextBtn.addEventListener('click', () => {
+    quizScore += pendingScore;
+    currentRank = Math.max(1, currentRank + pendingDelta);
+    quizIndex++;
+    if (quizIndex >= QUIZ_QUESTIONS.length) {
+      finishQuiz();
+    } else {
+      renderQuizQuestion();
+    }
+  });
+
+  // tier is driven by the FINAL rank itself, not directly by the quiz score
+  // — good quiz answers move you down the rank, and it's the resulting rank
+  // that decides which color/badge you land on, lowest first
+  const TIERS = [
+    { max: 500, label: 'Priority Tier', gradient: 'linear-gradient(155deg, #7db589 0%, #4c8a5f 45%, #1f4a2f 100%)' },
+    { max: 1500, label: 'Early Tier', gradient: 'linear-gradient(155deg, #6fa9c2 0%, #3c7488 45%, #1c3a44 100%)' },
+    { max: 3000, label: 'Standard Tier', gradient: 'linear-gradient(155deg, #cf9f5f 0%, #8a6a37 45%, #453419 100%)' },
+    { max: Infinity, label: 'Standby Tier', gradient: 'linear-gradient(155deg, #8f8686 0%, #5a5252 45%, #2a2626 100%)' }
+  ];
+  function getTier(rank){
+    return TIERS.find(t => rank <= t.max);
+  }
+
+  function showSuccess(rank, segment){
+    const tier = getTier(rank);
+    tierBadge.textContent = tier.label;
+    infoSuccess.style.background = tier.gradient;
+
+    if (segment === 'premium') {
+      setTooltip("You're in the fast lane");
+    } else {
+      setTooltip("You're on the list");
+    }
+    showStep('success');
+    animateQueueNumber(queueNumberEl, rank, 550);
+  }
+
+  function finishQuiz(){
+    const segment = quizScore >= 6 ? 'premium' : 'standard'; // out of a possible 8 now, across 4 questions
+    localStorage.setItem('waitlistSegment', segment);
+    if (segment === 'premium') currentRank = Math.max(1, currentRank - 500);
+    showSuccess(currentRank, segment);
+  }
+
+  let countdownIntervalId = null;
+  function runCountdown(onDone){
+    showStep('countdown');
+    setTooltip('Get ready…');
+    let n = 3;
+    countdownNumber.textContent = n;
+    retrigger(countdownNumber, 'retrig');
+    countdownIntervalId = setInterval(() => {
+      n--;
+      if (n <= 0) {
+        clearInterval(countdownIntervalId);
+        countdownIntervalId = null;
+        onDone();
+      } else {
+        countdownNumber.textContent = n;
+        retrigger(countdownNumber, 'retrig');
+      }
+    }, 550);
+  }
+
+  bumpMeUpBtn.addEventListener('click', () => {
+    bumpMeUpBtn.disabled = true;
+    skipQuizBtn.disabled = true;
+    runCountdown(() => {
+      bumpMeUpBtn.disabled = false;
+      skipQuizBtn.disabled = false;
+      startQuiz();
+    });
+  });
+
+  skipQuizBtn.addEventListener('click', () => {
+    localStorage.setItem('waitlistSegment', 'skipped');
+    showSuccess(baseRank, 'skipped');
+  });
+
+  waitlistForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (!waitlistEmail.value || !waitlistEmail.checkValidity() || !isPhoneValid()) return;
+    baseRank = nextQueuePosition();
+    rankBadge.textContent = baseRank.toLocaleString();
+    rankCopy.textContent = RANK_COPY_DEFAULT;
+    setTooltip("Let's see where you stand");
+    showStep('rank');
+  });
+
+  // ----- "Share the news" — copies the page link to the clipboard and
+  // gives a brief confirmation right in the button label -----
+  const shareBtn = document.getElementById('shareBtn');
+  const shareLabel = document.getElementById('shareLabel');
+  const SHARE_DEFAULT_LABEL = shareLabel.textContent;
+
+  async function copyPageLink(){
+    const url = window.location.href;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      try {
+        await navigator.clipboard.writeText(url);
+        return true;
+      } catch (err) { /* fall through to the manual copy below */ }
+    }
+    // fallback for browsers/contexts without the async Clipboard API
+    const temp = document.createElement('textarea');
+    temp.value = url;
+    temp.style.position = 'fixed';
+    temp.style.opacity = '0';
+    document.body.appendChild(temp);
+    temp.select();
+    let copied = false;
+    try { copied = document.execCommand('copy'); } catch (err) { copied = false; }
+    document.body.removeChild(temp);
+    return copied;
+  }
+
+  shareBtn.addEventListener('click', async () => {
+    const copied = await copyPageLink();
+    shareLabel.textContent = copied ? 'Link copied!' : 'Copy failed';
+    setTimeout(() => { shareLabel.textContent = SHARE_DEFAULT_LABEL; }, 1800);
+  });
+
+  // ===== pinch-and-slide hand gesture — an alternate way to fire the same
+  // "join the waitlist" action as dragging the handle. Desktop/webcam only
+  // (the affordance link is hidden on phone-width viewports via CSS media
+  // query), but the code itself is left intact in case someone reaches
+  // this page on a tablet/laptop-with-touch hybrid where it still makes
+  // sense. Pinch thumb + index finger together in the air in front of the
+  // camera, then slide the pinch left to right; it drives the exact same
+  // handle/progress logic as a mouse or touch drag, so past 70% it triggers
+  // activateStart() the same way. Uses MediaPipe's HandLandmarker, loaded
+  // on demand so nothing is downloaded (and no camera permission is
+  // requested) until the visitor opts in via the "Enable hand gesture"
+  // button. =====
+  const gestureToggle = document.getElementById('gestureToggle');
+  const gesturePreview = document.getElementById('gesturePreview');
+  const gestureVideo = document.getElementById('gestureVideo');
+  const gestureCanvas = document.getElementById('gestureCanvas');
+  const gctx = gestureCanvas.getContext('2d');
+
+  let handLandmarker = null;
+  let gestureStream = null;
+  let gestureActive = false;
+  let gestureRafId = null;
+
+  let pinching = false;
+  let pinchStartRawX = 0;
+  let smoothProgress = 0;
+
+  const PINCH_ON = 0.55;   // thumb-to-index distance (relative to hand size) below this = pinched
+  const PINCH_OFF = 0.85;  // above this = released — gap between the two avoids flicker at the edge
+  const SWIPE_SPAN = 0.28; // normalized horizontal travel that counts as a full left-to-right slide
+  const SMOOTHING = 0.4;   // 0..1, higher = snappier but jitterier
+
+  function landmarkDist(a, b){ return Math.hypot(a.x - b.x, a.y - b.y); }
+
+  async function loadHandLandmarker(){
+    const { HandLandmarker, FilesetResolver } = await import(
+      'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14'
+    );
+    const vision = await FilesetResolver.forVisionTasks(
+      'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm'
+    );
+    return HandLandmarker.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
+        delegate: 'GPU'
+      },
+      runningMode: 'VIDEO',
+      numHands: 1
+    });
+  }
+
+  function endGesturePinch(){
+    // mirrors endDrag() for a released-early pinch: spring back unless
+    // we already crossed the trigger threshold (in which case the normal
+    // "reset after the panel opens" timeout from activateStart handles it)
+    if (lastProgress < 1) {
+      ctaBox.classList.remove('dragging');
+      setHandleProgress(0, true);
+    }
+    pinching = false;
+    smoothProgress = 0;
+  }
+
+  function gestureLoop(){
+    if (!gestureActive) return;
+    const now = performance.now();
+    const result = handLandmarker.detectForVideo(gestureVideo, now);
+
+    gctx.clearRect(0, 0, gestureCanvas.width, gestureCanvas.height);
+
+    const hand = result.landmarks && result.landmarks[0];
+    if (hand) {
+      const thumbTip = hand[4], indexTip = hand[8], wrist = hand[0], indexMcp = hand[9];
+      const handScale = Math.max(landmarkDist(wrist, indexMcp), 0.001);
+      const pinchDist = landmarkDist(thumbTip, indexTip) / handScale;
+      const isPinched = pinchDist < (pinching ? PINCH_OFF : PINCH_ON);
+
+      // draw the tracked pinch point (raw coords — the container itself is
+      // mirrored in CSS, so this lines up with the mirrored video under it)
+      gctx.beginPath();
+      gctx.arc(indexTip.x * gestureCanvas.width, indexTip.y * gestureCanvas.height, 7, 0, Math.PI * 2);
+      gctx.fillStyle = isPinched ? '#9e2027' : 'rgba(255,255,255,.75)';
+      gctx.fill();
+
+      if (!pinching && isPinched) {
+        pinching = true;
+        pinchStartRawX = indexTip.x;
+        smoothProgress = 0;
+        measureTrack();
+        ctaBox.classList.add('dragging');
+      } else if (pinching && !isPinched) {
+        endGesturePinch();
+      } else if (pinching) {
+        // video is mirrored on screen (CSS scaleX(-1)), so an onscreen
+        // left→right slide corresponds to the raw x coordinate decreasing
+        const onscreenDelta = pinchStartRawX - indexTip.x;
+        const target = Math.min(1, Math.max(0, onscreenDelta / SWIPE_SPAN));
+        smoothProgress += (target - smoothProgress) * SMOOTHING;
+        setHandleProgress(smoothProgress, false);
+        if (smoothProgress >= 0.7) {
+          pinching = false;
+          setHandleProgress(1, true);
+          activateStart(); // same trigger as a completed mouse/touch drag
+          setTimeout(() => setHandleProgress(0, true), PLACEHOLDER_DELAY_MS);
+        }
+      }
+    } else if (pinching) {
+      endGesturePinch(); // lost hand tracking mid-pinch — treat like a release
+    }
+
+    gestureRafId = requestAnimationFrame(gestureLoop);
+  }
+
+  const GESTURE_DEFAULT_LABEL = gestureToggle.innerHTML;
+
+  async function startGesture(){
+    gestureToggle.disabled = true;
+    gestureToggle.classList.add('loading');
+    gestureToggle.textContent = 'Starting camera…';
+    try {
+      if (!handLandmarker) handLandmarker = await loadHandLandmarker();
+      gestureStream = await navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240 }, audio: false });
+      gestureVideo.srcObject = gestureStream;
+      await gestureVideo.play();
+      gestureCanvas.width = gestureVideo.videoWidth || 320;
+      gestureCanvas.height = gestureVideo.videoHeight || 240;
+      gestureActive = true;
+      gesturePreview.classList.add('on');
+      gestureToggle.classList.add('active');
+      gestureToggle.textContent = 'Gesture control on — pinch & slide right to join';
+      gestureLoop();
+    } catch (err) {
+      console.error('Hand gesture unavailable:', err);
+      gestureToggle.textContent = 'Camera unavailable';
+      retrigger(gestureToggle, 'shake');
+      setTimeout(() => { gestureToggle.innerHTML = GESTURE_DEFAULT_LABEL; }, 2200);
+    } finally {
+      gestureToggle.disabled = false;
+      gestureToggle.classList.remove('loading');
+    }
+  }
+
+  function stopGesture(){
+    gestureActive = false;
+    if (gestureRafId) cancelAnimationFrame(gestureRafId);
+    if (gestureStream) gestureStream.getTracks().forEach(t => t.stop());
+    gestureStream = null;
+    gesturePreview.classList.remove('on');
+    gestureToggle.classList.remove('active');
+    gestureToggle.innerHTML = GESTURE_DEFAULT_LABEL;
+    if (pinching) endGesturePinch();
+  }
+
+  gestureToggle.addEventListener('click', () => {
+    if (gestureActive) stopGesture(); else startGesture();
+  });
+</script>
+
+</body>
+</html>
