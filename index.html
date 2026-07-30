@@ -162,22 +162,21 @@
   }
 
   .cta-label{
-    /* centered in the space to the right of the arrow handle, not the
-       whole pill — the handle sits at left:4px width:56px, so the label's
-       "left border" starts just past it, then centers within what's left */
-    position:absolute;top:50%;left:72px;right:20px;
-    transform:translateY(-50%);
-    text-align:center;
+    /* arrow handle is hidden in this variant, so the label just centers
+       across the whole pill again */
     font-size:17px;font-weight:600;font-family:inherit;
     white-space:nowrap;
     transition:opacity .25s ease;
   }
 
   .cta-handle{
+    /* arrow removed altogether — kept in the DOM (untouched drag/gesture
+       logic still targets it) but fully hidden so nothing renders */
+    display:none;
     position:absolute;top:50%;left:4px;margin-top:-28px;
     width:56px;height:56px;border-radius:50%;
     background:linear-gradient(160deg,#ffffff,#d9d9d9);
-    display:flex;align-items:center;justify-content:center;
+    align-items:center;justify-content:center;
     cursor:grab;
     touch-action:none;
     box-shadow:0 4px 10px rgba(0,0,0,.3);
@@ -537,7 +536,7 @@
        visibly overshooting the tagline's line width) */
     .cta-box{ width:min(210px,68vw);height:46px; }
     .cta-handle{ width:38px;height:38px;margin-top:-19px; }
-    .cta-label{ font-size:13.5px;left:50px;right:14px; }
+    .cta-label{ font-size:13.5px; }
     .gesture-row{ display:none; }
     /* on portrait phones, vmax is dominated by the (much taller) height,
        so the desktop ring-c/-b sizing left them too small to actually
